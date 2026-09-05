@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>V12B - Code 39 invertido</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f2f2f2;font-family:Arial,sans-serif;color:#252525}
+.wrap{max-width:680px;margin:auto;padding:16px}
+.head{background:#4b2e83;color:#fff;border-radius:16px;padding:20px;text-align:center}
+.head h1{margin:0 0 6px;font-size:21px}
+.head p{margin:0;font-size:13px;opacity:.92}
+.card{background:#fff;border-radius:16px;padding:16px;margin-top:14px;box-shadow:0 4px 16px rgba(0,0,0,.08)}
+.video-wrap{position:relative;border-radius:12px;overflow:hidden;background:#111}
+video{width:100%;min-height:280px;display:block;object-fit:cover;background:#111}
+.scan-box{position:absolute;left:6%;right:6%;top:39%;height:22%;border:3px solid #fff;border-radius:10px;box-shadow:0 0 0 9999px rgba(0,0,0,.28);pointer-events:none}
+.scan-line{position:absolute;left:9%;right:9%;top:50%;height:2px;background:#fff;opacity:.95;pointer-events:none}
+button{width:100%;padding:14px;margin-top:10px;border:0;border-radius:11px;font-size:16px;font-weight:bold}
+.primary{background:#4b2e83;color:#fff}
+.secondary{background:#e2e2e2;color:#333}
+.result{border:2px solid #ddd;border-radius:12px;padding:18px;text-align:center}
+.result.ok{border-color:#1b7f32;background:#eef8ef}
+.label{font-size:12px;color:#666;font-weight:bold}
+#codigo{font-size:30px;font-weight:bold;color:#4b2e83;word-break:break-all;margin-top:8px}
+#formato,#modo{font-size:12px;color:#666;margin-top:6px}
+.row{padding:8px 0;border-bottom:1px solid #eee;font-size:14px}
+.val{font-weight:bold}.oktxt{color:#1b7f32}.bad{color:#b3261e}.warn{color:#9a6700}
+#preview{width:100%;margin-top:10px;border-radius:10px;border:1px solid #ddd;image-rendering:auto}
+#log{white-space:pre-wrap;background:#111;color:#eee;border-radius:10px;padding:12px;font-size:12px;min-height:90px}
+.note{font-size:13px;line-height:1.45;color:#555}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <h1>V12B · CODE 39 INVERTIDO</h1>
+    <p>Lectura en tiempo real con inversión automática de imagen</p>
+  </div>
+
+  <div class="card">
+    <div class="video-wrap">
+      <video id="video" autoplay playsinline muted></video>
+      <div class="scan-box"></div>
+      <div class="scan-line"></div>
+    </div>
+    <button id="btnStart" class="primary">📷 Iniciar lector</button>
+    <button id="btnStop" class="secondary" disabled>Detener lector</button>
+  </div>
+
+  <div class="card">
+    <div id="resultado" class="result">
+      <div class="label">CÓDIGO DETECTADO</div>
+      <div id="codigo">—</div>
+      <div id="formato"></div>
+      <div id="modo"></div>
+    </div>
+    <p class="note">Centra únicamente las barras dentro del rectángulo blanco. La V12B intenta leer primero la imagen invertida y después la imagen normal procesada.</p>
+  </div>
+
+  <div class="card">
+    <div class="row">HTTPS: <span id="https" class="val">—</span></div>
+    <div class="row">BarcodeDetector: <span id="bd" class="val">—</span></div>
+    <div class="row">CODE_39: <span id="c39" class="val">—</span></div>
+    <div class="row">Cámara: <span id="cam" class="val">DETENIDA</span></div>
+  </div>
+
+  <div class="card">
+    <b>Vista procesada para el detector</b>
+    <canvas id="preview"></canvas>
+  </div>
+
+  <div class="card">
+    <b>Diagnóstico</b>
+    <div id="log">Página cargada.</div>
+  </div>
+</div>
+
+<canvas id="work" style="display:none"></canvas>
+
+<script>
+(() => {
+  const video = document.getElementById('video');
+  const btnStart = document.getElementById('btnStart');
+  const btnStop = document.getElementById('btnStop');
+  const resultado = document.getElementById('resultado');
+  const codigoEl = document.getElementById('codigo');
+  const formatoEl = document.getElementById('formato');
+  const modoEl = document.getElementById('modo');
+  const httpsEl = document.getElementById('https');
+  const bdEl = document.getElementById('bd');
+  const c39El = document.getElementById('c39');
+  const camEl = document.getElementById('cam');
+  const log = document.getElementById('log');
+  const work = document.getElementById('work');
+  const preview = document.getElementById('preview');
+
+  let stream = null;
+  let detector = null;
+  let activo = false;
+  let timer = null;
+  let procesando = false;
+  let ultimo = '';
+  let ultimaLectura = 0;
+
+  function setText(el, txt, cls='') {
+    el.textContent = txt;
+    el.className = 'val ' + cls;
+  }
+
+  function write(msg) {
+    const t = new Date().toLocaleTimeString();
+    log.textContent += '\n[' + t + '] ' + msg;
+  }
+
+  setText(httpsEl, window.isSecureContext ? 'SÍ' : 'NO', window.isSecureContext ? 'oktxt' : 'bad');
+
+  const soportaBD = 'BarcodeDetector' in window;
+  setText(bdEl, soportaBD ? 'DISPONIBLE' : 'NO DISPONIBLE', soportaBD ? 'oktxt' : 'bad');
+
+  async function prepararDetector() {
+    if (!soportaBD) return false;
+
+    try {
+      const soportados = await BarcodeDetector.getSupportedFormats();
+      const ok39 = soportados.includes('code_39');
+      setText(c39El, ok39 ? 'SOPORTADO' : 'NO SOPORTADO', ok39 ? 'oktxt' : 'bad');
+      write('Formatos soportados: ' + soportados.join(', '));
+
+      if (!ok39) {
+        write('ERROR: este navegador no reporta soporte para CODE_39.');
+        return false;
+      }
+
+      detector = new BarcodeDetector({ formats: ['code_39'] });
+      write('Detector exclusivo CODE_39 preparado.');
+      return true;
+    } catch (e) {
+      setText(c39El, 'ERROR', 'bad');
+      write('Error preparando detector: ' + e.name + ' - ' + e.message);
+      return false;
+    }
+  }
+
+  function extraerROI(invertir) {
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    if (!vw || !vh) return null;
+
+    // Área amplia horizontal centrada, pensada para el barcode del gafete.
+    const sx = Math.floor(vw * 0.05);
+    const sy = Math.floor(vh * 0.37);
+    const sw = Math.floor(vw * 0.90);
+    const sh = Math.floor(vh * 0.26);
+
+    const scale = 1.6;
+    work.width = Math.max(640, Math.floor(sw * scale));
+    work.height = Math.max(180, Math.floor(sh * scale));
+
+    const ctx = work.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, work.width, work.height);
+
+    const img = ctx.getImageData(0, 0, work.width, work.height);
+    const d = img.data;
+
+    // Gris + contraste + binarización. En invertido convertimos barras claras en oscuras.
+    for (let i = 0; i < d.length; i += 4) {
+      const gray = Math.round(0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2]);
+      // umbral ligeramente alto para separar blanco/guinda del gafete.
+      let v = gray >= 155 ? 255 : 0;
+      if (invertir) v = 255 - v;
+      d[i] = d[i+1] = d[i+2] = v;
+      d[i+3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+
+    // Mostrar la versión procesada que se está probando.
+    preview.width = work.width;
+    preview.height = work.height;
+    preview.getContext('2d').drawImage(work, 0, 0);
+
+    return work;
+  }
+
+  async function detectarUnaVez() {
+    if (!activo || !detector || procesando || video.readyState < 2) return;
+    procesando = true;
+
+    try {
+      // 1) Gafete actual: barras blancas sobre guinda -> invertir.
+      let canvas = extraerROI(true);
+      let codes = canvas ? await detector.detect(canvas) : [];
+
+      let modo = 'Imagen invertida';
+
+      // 2) Respaldo: normal procesada.
+      if (!codes || !codes.length) {
+        canvas = extraerROI(false);
+        codes = canvas ? await detector.detect(canvas) : [];
+        modo = 'Imagen normal procesada';
+      }
+
+      if (codes && codes.length) {
+        const value = String(codes[0].rawValue || '').trim();
+        const now = Date.now();
+
+        if (value && (value !== ultimo || now - ultimaLectura > 1800)) {
+          ultimo = value;
+          ultimaLectura = now;
+
+          codigoEl.textContent = value;
+          formatoEl.textContent = 'Formato: CODE 39';
+          modoEl.textContent = 'Detectado con: ' + modo;
+          resultado.classList.add('ok');
+
+          write('DETECTADO: ' + value + ' | ' + modo);
+          if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
+        }
+      }
+    } catch (e) {
+      write('Error de detección: ' + e.name + ' - ' + e.message);
+    } finally {
+      procesando = false;
+    }
+  }
+
+  async function iniciar() {
+    write('Botón Iniciar lector pulsado.');
+
+    if (!window.isSecureContext) {
+      write('ERROR: se requiere HTTPS.');
+      return;
+    }
+
+    const ok = await prepararDetector();
+    if (!ok) return;
+
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          focusMode: { ideal: 'continuous' }
+        },
+        audio: false
+      });
+
+      video.srcObject = stream;
+      await video.play();
+
+      activo = true;
+      btnStart.disabled = true;
+      btnStop.disabled = false;
+      setText(camEl, 'ACTIVA', 'oktxt');
+      write('Cámara abierta. Procesamiento CODE_39 iniciado.');
+
+      timer = setInterval(detectarUnaVez, 140);
+    } catch (e) {
+      setText(camEl, 'ERROR', 'bad');
+      write('ERROR cámara: ' + e.name + ' - ' + e.message);
+    }
+  }
+
+  function detener() {
+    activo = false;
+    if (timer) clearInterval(timer);
+    timer = null;
+
+    if (stream) {
+      stream.getTracks().forEach(t => t.stop());
+      stream = null;
+    }
+
+    video.srcObject = null;
+    btnStart.disabled = false;
+    btnStop.disabled = true;
+    setText(camEl, 'DETENIDA', 'warn');
+    write('Lector detenido.');
+  }
+
+  btnStart.addEventListener('click', iniciar);
+  btnStop.addEventListener('click', detener);
+})();
+</script>
+</body>
+</html>
