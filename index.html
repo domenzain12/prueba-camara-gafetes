@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>V11 - Diagnóstico de cámara</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f2f2f2;font-family:Arial,sans-serif;color:#252525}
+.wrap{max-width:680px;margin:auto;padding:16px}
+.head{background:#4b2e83;color:#fff;border-radius:16px;padding:20px;text-align:center}
+.head h1{margin:0 0 6px;font-size:21px}
+.head p{margin:0;font-size:13px;opacity:.9}
+.card{background:#fff;border-radius:16px;padding:16px;margin-top:14px;box-shadow:0 4px 16px rgba(0,0,0,.08)}
+video{width:100%;min-height:260px;background:#111;border-radius:12px;object-fit:cover}
+button{width:100%;padding:14px;margin-top:10px;border:0;border-radius:11px;font-size:16px;font-weight:bold}
+.primary{background:#4b2e83;color:#fff}
+.secondary{background:#e2e2e2;color:#333}
+.row{padding:8px 0;border-bottom:1px solid #eee;font-size:14px}
+.val{font-weight:bold}
+.ok{color:#1b7f32}.bad{color:#b3261e}.warn{color:#9a6700}
+#log{white-space:pre-wrap;background:#111;color:#eee;border-radius:10px;padding:12px;font-size:12px;min-height:90px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <h1>V11 · DIAGNÓSTICO DE CÁMARA</h1>
+    <p>Prueba directa con getUserMedia, sin lector de códigos</p>
+  </div>
+
+  <div class="card">
+    <video id="video" autoplay playsinline muted></video>
+    <button id="btnStart" class="primary">📷 Abrir cámara</button>
+    <button id="btnStop" class="secondary" disabled>Detener cámara</button>
+  </div>
+
+  <div class="card">
+    <div class="row">HTTPS: <span id="https" class="val">—</span></div>
+    <div class="row">getUserMedia: <span id="gum" class="val">—</span></div>
+    <div class="row">Permiso cámara: <span id="perm" class="val">—</span></div>
+    <div class="row">Cámaras detectadas: <span id="cams" class="val">—</span></div>
+  </div>
+
+  <div class="card">
+    <b>Diagnóstico</b>
+    <div id="log">Página cargada.</div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const video = document.getElementById('video');
+  const btnStart = document.getElementById('btnStart');
+  const btnStop = document.getElementById('btnStop');
+  const log = document.getElementById('log');
+  const httpsEl = document.getElementById('https');
+  const gumEl = document.getElementById('gum');
+  const permEl = document.getElementById('perm');
+  const camsEl = document.getElementById('cams');
+  let stream = null;
+
+  function setText(el, text, cls){
+    el.textContent = text;
+    el.className = 'val ' + (cls || '');
+  }
+
+  function write(msg){
+    const time = new Date().toLocaleTimeString();
+    log.textContent += '\n[' + time + '] ' + msg;
+  }
+
+  const secure = window.isSecureContext;
+  setText(httpsEl, secure ? 'SÍ' : 'NO', secure ? 'ok' : 'bad');
+
+  const hasGum = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  setText(gumEl, hasGum ? 'DISPONIBLE' : 'NO DISPONIBLE', hasGum ? 'ok' : 'bad');
+
+  async function checkPermission(){
+    if (!navigator.permissions || !navigator.permissions.query) {
+      setText(permEl, 'NO CONSULTABLE', 'warn');
+      return;
+    }
+    try {
+      const p = await navigator.permissions.query({name:'camera'});
+      setText(permEl, p.state.toUpperCase(), p.state === 'granted' ? 'ok' : (p.state === 'denied' ? 'bad' : 'warn'));
+      p.onchange = () => setText(permEl, p.state.toUpperCase(), p.state === 'granted' ? 'ok' : (p.state === 'denied' ? 'bad' : 'warn'));
+    } catch(e) {
+      setText(permEl, 'NO CONSULTABLE', 'warn');
+    }
+  }
+
+  async function countCameras(){
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+      setText(camsEl, 'NO DISPONIBLE', 'bad');
+      return;
+    }
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cams = devices.filter(d => d.kind === 'videoinput');
+      setText(camsEl, String(cams.length), cams.length ? 'ok' : 'warn');
+    } catch(e) {
+      setText(camsEl, 'ERROR', 'bad');
+      write('enumerateDevices: ' + e.name + ' - ' + e.message);
+    }
+  }
+
+  btnStart.addEventListener('click', async function(){
+    write('Botón Abrir cámara pulsado.');
+    if (!window.isSecureContext) {
+      write('ERROR: la página no está en contexto HTTPS seguro.');
+      return;
+    }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      write('ERROR: getUserMedia no está disponible en este navegador.');
+      return;
+    }
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      });
+      video.srcObject = stream;
+      await video.play();
+      btnStart.disabled = true;
+      btnStop.disabled = false;
+      write('CÁMARA ABIERTA CORRECTAMENTE.');
+      await checkPermission();
+      await countCameras();
+    } catch(e) {
+      write('ERROR: ' + e.name + ' - ' + e.message);
+      await checkPermission();
+    }
+  });
+
+  btnStop.addEventListener('click', function(){
+    if (stream) {
+      stream.getTracks().forEach(t => t.stop());
+      stream = null;
+      video.srcObject = null;
+    }
+    btnStart.disabled = false;
+    btnStop.disabled = true;
+    write('Cámara detenida.');
+  });
+
+  checkPermission();
+  countCameras();
+})();
+</script>
+</body>
+</html>
