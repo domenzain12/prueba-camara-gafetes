@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <style>
+    :root{--p:#4b2e83;--p2:#3b236a;--g:#a6a6a0;--bg:#f5f6f8;--ok:#18864b;--warn:#a76500;--err:#b42318;--bd:#dedfe3;--tx:#25262a}
+    *{box-sizing:border-box} body{margin:0;font-family:Arial,Helvetica,sans-serif;color:var(--tx);background:var(--bg)}
+    header{background:var(--p);color:#fff;padding:16px 20px}.head{max-width:1180px;margin:auto;display:flex;justify-content:space-between;gap:15px;align-items:center;flex-wrap:wrap}
+    h1{margin:0;font-size:21px}.sub{font-size:12px;opacity:.9;margin-top:4px}.userbox{text-align:right;font-size:12px}.wrap{max-width:1180px;margin:auto;padding:16px}
+    .card{background:#fff;border:1px solid var(--bd);border-radius:14px;padding:17px;margin-bottom:15px;box-shadow:0 2px 8px rgba(0,0,0,.035)}
+    .login{max-width:430px;margin:65px auto}.grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-top:13px}
+    .stat{border:1px solid var(--bd);border-radius:11px;padding:12px;text-align:center;background:#fafafa}.stat strong{display:block;font-size:22px;color:var(--p);margin-top:4px}
+    label{display:block;font-weight:700;margin:0 0 7px}input,select{width:100%;min-height:44px;padding:10px 12px;border:1px solid #c9cbd1;border-radius:9px;font-size:16px;background:#fff}
+    button{min-height:42px;border:0;border-radius:9px;padding:9px 15px;font-weight:700;cursor:pointer}.primary{background:var(--p);color:#fff}.primary:hover{background:var(--p2)}
+    .secondary{background:#ededf0;color:#303036}.danger{background:#fff0ee;color:var(--err)}.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:11px}
+    .status{display:none;border-radius:10px;padding:13px;margin-top:13px}.status.show{display:block}.status.ok{background:#eaf7ef;color:#11693a;border:1px solid #b9e3c9}
+    .status.warn{background:#fff6e6;color:#845300;border:1px solid #efd49a}.status.error{background:#fff0ee;color:#9c1c13;border:1px solid #efc0ba}
+    .muted{color:#6d6f76;font-size:13px}.progress{height:9px;background:#ececf0;border-radius:99px;overflow:hidden;margin-top:8px}.progress>div{height:100%;background:var(--p);width:0}
+    .persona{border:1px solid var(--bd);border-radius:10px;padding:11px;display:flex;justify-content:space-between;gap:10px;align-items:center;margin-top:8px}.persona strong{color:var(--p)}
+    .persona small{display:block;margin-top:4px;color:#666}.ultimo{display:grid;grid-template-columns:85px 1fr 130px;gap:8px;padding:8px 0;border-bottom:1px solid #eee;font-size:13px}
+    .menu{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.menu button.active{background:var(--p);color:#fff}.hidden{display:none!important}.busy{opacity:.6;pointer-events:none}
+    .ambito{font-size:13px;font-weight:700;color:var(--p);margin-top:7px}.tablewrap{overflow:auto;border:1px solid var(--bd);border-radius:10px;margin-top:12px}
+    table{border-collapse:collapse;width:100%;min-width:760px;font-size:13px}th{background:var(--p);color:#fff;padding:9px;text-align:left;white-space:nowrap}td{padding:8px 9px;border-bottom:1px solid #eee}
+    tr:nth-child(even) td{background:#fafafa}.num{text-align:right}.pct{font-weight:700;color:var(--p)}
+
+    .video-wrap{position:relative;border-radius:12px;overflow:hidden;background:#111;margin-top:10px}
+    #videoScanner{width:100%;min-height:280px;display:block;object-fit:cover;background:#111}
+    .scan-box{position:absolute;left:6%;right:6%;top:39%;height:22%;border:3px solid #fff;border-radius:10px;box-shadow:0 0 0 9999px rgba(0,0,0,.28);pointer-events:none}
+    .scan-line{position:absolute;left:9%;right:9%;top:50%;height:2px;background:#fff;opacity:.95;pointer-events:none}
+    #bridgeFrame{position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;left:-100px;top:-100px;border:0}
+    .backend-config{border:1px dashed #c9cbd1;border-radius:10px;padding:11px;margin-top:12px;background:#fafafa}
+    #canvasProcesado{display:none}
+    @media(max-width:760px){.grid{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}.wrap{padding:11px}.ultimo{grid-template-columns:70px 1fr 85px}.userbox{text-align:left}}
+    @media print{header,.menu,#reportActions,.no-print{display:none!important}.wrap{max-width:none;padding:0}.card{box-shadow:none;border:0}.tablewrap{overflow:visible;border:0}table{min-width:0;font-size:10px}th{background:#ddd!important;color:#000!important}}
+  </style>
+</head>
+<body>
+<header id="headerApp" class="hidden">
+  <div class="head">
+    <div><h1>Sistema de Control de Asistencia V13</h1><div class="sub">Registro y seguimiento territorial</div></div>
+    <div class="userbox"><strong id="usrNombre"></strong><br><span id="usrRol"></span><br><span id="usrAmbito"></span></div>
+  </div>
+</header>
+
+<div id="loginView" class="wrap">
+  <section class="card login">
+    <h2 style="margin-top:0;color:#4b2e83">Inicio de sesión</h2>
+    <p class="muted">Ingresa con el usuario asignado a tu estación de captura.</p>
+    <label>Usuario</label><input id="loginUser" autocomplete="username">
+    <label style="margin-top:12px">Contraseña</label><input id="loginPass" type="password" autocomplete="current-password">
+    <button class="primary" id="btnLogin" style="width:100%;margin-top:15px">Ingresar</button>
+    <div id="backendConfig" class="backend-config hidden">
+      <label>URL del backend Apps Script</label>
+      <input id="backendUrl" placeholder="https://script.google.com/macros/s/.../exec">
+      <button class="secondary" id="btnGuardarBackend" style="width:100%;margin-top:8px">Guardar URL y conectar</button>
+      <div class="muted" style="margin-top:7px">Se guarda solamente en este dispositivo.</div>
+    </div>
+    <div id="loginEstado" class="status"></div>
+  </section>
+</div>
+
+<div id="appView" class="wrap hidden">
+  <div class="menu no-print">
+    <button id="tabRegistro" class="secondary active">Registro</button>
+    <button id="tabReportes" class="secondary hidden">Reportes</button>
+    <button id="btnSalir" class="danger" style="margin-left:auto">Cerrar sesión</button>
+  </div>
+
+  <section class="card" id="contextCard">
+    <label for="evento">Evento activo</label>
+    <select id="evento"><option value="">Selecciona un evento</option></select>
+    <div id="ambitoLabel" class="ambito"></div>
+    <div class="stats">
+      <div class="stat"><span>Convocados</span><strong id="stConv">0</strong></div>
+      <div class="stat"><span>Asistencias</span><strong id="stAsis">0</strong></div>
+      <div class="stat"><span>Pendientes</span><strong id="stPend">0</strong></div>
+      <div class="stat"><span>Avance</span><strong id="stPct">0%</strong></div>
+    </div>
+    <div class="progress"><div id="barra"></div></div>
+  </section>
+
+  <div id="registroView">
+    <div class="grid">
+      <section class="card hidden" id="scannerCard">
+        <h2 style="margin-top:0">Escanear gafete</h2>
+        <p class="muted">Lector CODE 39 en tiempo real para los gafetes impresos con barras claras sobre fondo guinda.</p>
+        <div class="video-wrap">
+          <video id="videoScanner" autoplay playsinline muted></video>
+          <div class="scan-box"></div><div class="scan-line"></div>
+        </div>
+        <div class="actions">
+          <button class="primary" id="btnIniciarCamara">📷 Iniciar lector</button>
+          <button class="secondary" id="btnDetenerCamara" disabled>Detener lector</button>
+        </div>
+        <div style="margin-top:16px"><label>Código del gafete / lector físico</label><input id="codigoManual" autocomplete="off" placeholder="Escanea o escribe el código y presiona Enter"></div>
+        <div id="estadoScanner" class="status"></div>
+      </section>
+
+      <section class="card hidden" id="manualCard">
+        <h2 style="margin-top:0">Registro manual</h2>
+        <p class="muted">Busca entre todos los convocados por nombre, municipio, sección, cargo o código.</p>
+        <label>Buscar persona</label><input id="buscar" autocomplete="off" placeholder="Ej. Juan Pérez">
+        <div id="resultados"></div><div id="estadoManual" class="status"></div>
+      </section>
+    </div>
+
+    <section class="card">
+      <h2 style="margin-top:0">Últimos registros del ámbito</h2>
+      <div id="ultimos" class="muted">Selecciona un evento.</div>
+    </section>
+  </div>
+
+  <div id="reportView" class="hidden">
+    <section class="card">
+      <h2 style="margin-top:0">Reportes</h2>
+      <div class="grid">
+        <div><label>Tipo de reporte</label><select id="tipoReporte">
+          <option value="GENERAL">General</option>
+          <option value="MERIDA">Mérida por Distrito Local</option>
+          <option value="KANASIN">Kanasín</option>
+          <option value="INTERIOR">Interior por DF, DL y Municipio</option>
+        </select></div>
+        <div id="reportActions" class="actions" style="align-items:end">
+          <button class="primary" id="btnReporte">Actualizar reporte</button>
+          <button class="secondary" id="btnCsv">Exportar CSV</button>
+          <button class="secondary" onclick="window.print()">Imprimir / PDF</button>
+        </div>
+      </div>
+      <div id="reporteEstado" class="status"></div>
+      <h3 id="reporteTitulo" style="margin-bottom:4px"></h3>
+      <div id="reporteGenerado" class="muted"></div>
+      <div class="stats">
+        <div class="stat"><span>Convocados</span><strong id="rpConv">0</strong></div>
+        <div class="stat"><span>Asistencias</span><strong id="rpAsis">0</strong></div>
+        <div class="stat"><span>Pendientes</span><strong id="rpPend">0</strong></div>
+        <div class="stat"><span>Avance</span><strong id="rpPct">0%</strong></div>
+      </div>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Grupo</th><th>DF</th><th>DL</th><th>Municipio</th><th class="num">Convocados</th><th class="num">Asistencias</th><th class="num">Pendientes</th><th class="num">Avance</th></tr></thead>
+        <tbody id="reporteBody"></tbody>
+      </table></div>
+    </section>
+  </div>
+</div>
+
+<iframe id="bridgeFrame" title="Backend"></iframe>
+<canvas id="canvasProcesado"></canvas>
+
+<script>
+let TOKEN = localStorage.getItem('asistencia_v13_token') || '';
+let CONTEXTO = null, timerBusqueda = null, ultimoReporte = null;
+let BRIDGE_READY=false, RPC_SEQ=0, RPC_PENDING=new Map();
+let cameraStream=null, detector=null, cameraTimer=null, cameraBusy=false;
+let candidateCode='', candidateHits=0, candidateAt=0, scannerCooldownUntil=0;
+const $ = id => document.getElementById(id);
+
+window.addEventListener('load', async () => {
+  enlazar();
+  await conectarBackend();
+  if (TOKEN && BRIDGE_READY) {
+    try { const c = await rpc('obtenerContexto',TOKEN); iniciarApp(c); }
+    catch(e) { limpiarSesion(); }
+  }
+});
+
+function enlazar(){
+  $('btnLogin').addEventListener('click', login);
+  $('loginPass').addEventListener('keydown',e=>{if(e.key==='Enter')login()});
+  $('btnSalir').addEventListener('click', logout);
+  $('evento').addEventListener('change',()=>{candidateCode='';candidateHits=0;limpiarMensajes();actualizarResumen();if(!$('reportView').classList.contains('hidden')) cargarReporte()});
+  $('tabRegistro').addEventListener('click',()=>mostrarTab('registro'));
+  $('tabReportes').addEventListener('click',()=>mostrarTab('reportes'));
+  $('btnIniciarCamara').addEventListener('click',iniciarLectorCamara);
+  $('btnDetenerCamara').addEventListener('click',detenerLectorCamara);
+  $('btnGuardarBackend').addEventListener('click',guardarBackend);
+  $('codigoManual').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.value.trim())registrarCodigo(e.target.value.trim())});
+  $('buscar').addEventListener('input',e=>{clearTimeout(timerBusqueda);timerBusqueda=setTimeout(()=>buscarPersonas(e.target.value),250)});
+  $('btnReporte').addEventListener('click',cargarReporte);
+  $('tipoReporte').addEventListener('change',cargarReporte);
+  $('btnCsv').addEventListener('click',exportarCSV);
+}
+
+function getBackendUrl(){
+  return (localStorage.getItem('asistencia_v13_backend')||'').trim();
+}
+
+function guardarBackend(){
+  const u=$('backendUrl').value.trim();
+  if(!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec(?:\?.*)?$/.test(u)){
+    mostrar('loginEstado','Captura la URL /exec de la implementación de Apps Script.','warn');return;
+  }
+  localStorage.setItem('asistencia_v13_backend',u);
+  location.reload();
+}
+
+function conectarBackend(){
+  return new Promise(resolve=>{
+    const url=getBackendUrl();
+    if(!url){
+      $('backendConfig').classList.remove('hidden');
+      mostrar('loginEstado','Configura primero la URL del backend de Apps Script.','warn');
+      resolve(false);return;
+    }
+    $('backendUrl').value=url;
+    const sep=url.includes('?')?'&':'?';
+    $('bridgeFrame').src=url+sep+'mode=bridge&parentOrigin='+encodeURIComponent(location.origin);
+    const timeout=setTimeout(()=>{ if(!BRIDGE_READY){ $('backendConfig').classList.remove('hidden'); mostrar('loginEstado','No se pudo conectar con el backend. Verifica la URL y la implementación.','error'); resolve(false); } },10000);
+    const ready=()=>{clearTimeout(timeout);resolve(true)};
+    window.__bridgeResolve=ready;
+  });
+}
+
+window.addEventListener('message',ev=>{
+  const data=ev.data||{};
+  if(data.type==='V13_BRIDGE_READY'){
+    BRIDGE_READY=true;
+    $('backendConfig').classList.add('hidden');
+    if(window.__bridgeResolve){window.__bridgeResolve();window.__bridgeResolve=null}
+    return;
+  }
+  if(data.type!=='V13_RPC_RESULT'||!data.id)return;
+  const p=RPC_PENDING.get(data.id);if(!p)return;
+  RPC_PENDING.delete(data.id);clearTimeout(p.timer);
+  if(data.ok)p.resolve(data.result);else p.reject(new Error(data.error||'Error del backend.'));
+});
+
+function rpc(fn,...args){
+  return new Promise((resolve,reject)=>{
+    if(!BRIDGE_READY){reject(new Error('Backend no conectado.'));return}
+    const id='rpc_'+Date.now()+'_'+(++RPC_SEQ);
+    const timer=setTimeout(()=>{RPC_PENDING.delete(id);reject(new Error('El backend tardó demasiado en responder.'))},20000);
+    RPC_PENDING.set(id,{resolve,reject,timer});
+    $('bridgeFrame').contentWindow.postMessage({type:'V13_RPC',id,fn,args},'*');
+  });
+}
+
+
+async function login(){
+  const u=$('loginUser').value.trim(), p=$('loginPass').value;
+  if(!u||!p){mostrar('loginEstado','Captura usuario y contraseña.','warn');return}
+  $('btnLogin').disabled=true; mostrar('loginEstado','Validando...','warn');
+  try{
+    const r=await rpc('iniciarSesion',u,p);
+    if(!r.ok){mostrar('loginEstado',r.message||'No fue posible iniciar sesión.','error');return}
+    TOKEN=r.token; localStorage.setItem('asistencia_v13_token',TOKEN); iniciarApp(r.contexto);
+  }catch(e){mostrar('loginEstado',e.message,'error')}
+  finally{$('btnLogin').disabled=false}
+}
+
+function iniciarApp(c){
+  CONTEXTO=c;
+  $('loginView').classList.add('hidden'); $('headerApp').classList.remove('hidden'); $('appView').classList.remove('hidden');
+  $('usrNombre').textContent=c.usuario.nombre||c.usuario.usuario;
+  $('usrRol').textContent=c.usuario.rol;
+  $('usrAmbito').textContent=c.usuario.ambitoNombre||'General';
+  $('ambitoLabel').textContent='Ámbito de operación: '+(c.usuario.ambitoNombre||'General');
+
+  $('scannerCard').classList.toggle('hidden',!c.permisos.escanear);
+  $('manualCard').classList.toggle('hidden',!c.permisos.manual);
+  $('tabReportes').classList.toggle('hidden',!c.permisos.reportes);
+
+  const sel=$('evento'); sel.innerHTML='<option value="">Selecciona un evento</option>';
+  (c.eventos||[]).forEach(ev=>{const o=document.createElement('option');o.value=ev.id;o.textContent=ev.nombre+(ev.fecha?' - '+ev.fecha:'');sel.appendChild(o)});
+  if((c.eventos||[]).length===1){sel.value=c.eventos[0].id;actualizarResumen()}
+  mostrarTab('registro');
+}
+
+async function logout(){
+  detenerLectorCamara();
+  try{if(TOKEN)await rpc('cerrarSesion',TOKEN)}catch(e){}
+  limpiarSesion();
+}
+
+function limpiarSesion(){
+  TOKEN=''; CONTEXTO=null; localStorage.removeItem('asistencia_v13_token');
+  $('appView').classList.add('hidden');$('headerApp').classList.add('hidden');$('loginView').classList.remove('hidden');
+}
+
+function mostrarTab(t){
+  const rep=t==='reportes';
+  $('registroView').classList.toggle('hidden',rep);$('reportView').classList.toggle('hidden',!rep);
+  $('tabRegistro').classList.toggle('active',!rep);$('tabReportes').classList.toggle('active',rep);
+  if(rep)cargarReporte();
+}
+
+function getEvento(){
+  const id=$('evento').value;
+  if(!id){mostrar('estadoScanner','Selecciona un evento antes de registrar.','warn');return''}
+  return id;
+}
+
+async function prepararDetectorCode39(){
+  if(!('BarcodeDetector' in window)){
+    throw new Error('Este navegador no dispone de BarcodeDetector.');
+  }
+  const formatos=await BarcodeDetector.getSupportedFormats();
+  if(!formatos.includes('code_39')){
+    throw new Error('Este navegador no soporta CODE 39.');
+  }
+  detector=new BarcodeDetector({formats:['code_39']});
+}
+
+async function iniciarLectorCamara(){
+  if(!getEvento())return;
+  try{
+    await prepararDetectorCode39();
+    cameraStream=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},
+      audio:false
+    });
+    $('videoScanner').srcObject=cameraStream;
+    await $('videoScanner').play();
+    $('btnIniciarCamara').disabled=true;$('btnDetenerCamara').disabled=false;
+    mostrar('estadoScanner','Cámara activa. Centra el código de barras dentro del rectángulo.','warn');
+    candidateCode='';candidateHits=0;candidateAt=0;scannerCooldownUntil=0;
+    cameraTimer=setInterval(detectarCode39V13,150);
+  }catch(e){mostrar('estadoScanner','No se pudo iniciar el lector: '+e.message,'error')}
+}
+
+function detenerLectorCamara(){
+  if(cameraTimer)clearInterval(cameraTimer);cameraTimer=null;
+  if(cameraStream){cameraStream.getTracks().forEach(t=>t.stop());cameraStream=null}
+  $('videoScanner').srcObject=null;$('btnIniciarCamara').disabled=false;$('btnDetenerCamara').disabled=true;
+}
+
+function prepararCanvasV13(invertir){
+  const v=$('videoScanner'), c=$('canvasProcesado');
+  if(!v.videoWidth||!v.videoHeight)return null;
+  const sx=Math.floor(v.videoWidth*.05),sy=Math.floor(v.videoHeight*.37);
+  const sw=Math.floor(v.videoWidth*.90),sh=Math.floor(v.videoHeight*.26);
+  const scale=1.6;c.width=Math.max(640,Math.floor(sw*scale));c.height=Math.max(180,Math.floor(sh*scale));
+  const ctx=c.getContext('2d',{willReadFrequently:true});
+  ctx.drawImage(v,sx,sy,sw,sh,0,0,c.width,c.height);
+  const img=ctx.getImageData(0,0,c.width,c.height),d=img.data;
+  for(let i=0;i<d.length;i+=4){
+    const g=Math.round(.299*d[i]+.587*d[i+1]+.114*d[i+2]);
+    let x=g>=155?255:0;if(invertir)x=255-x;
+    d[i]=d[i+1]=d[i+2]=x;d[i+3]=255;
+  }
+  ctx.putImageData(img,0,0);return c;
+}
+
+async function detectarCode39V13(){
+  if(cameraBusy||!detector||Date.now()<scannerCooldownUntil)return;
+  const v=$('videoScanner');if(v.readyState<2)return;
+  cameraBusy=true;
+  try{
+    let c=prepararCanvasV13(true),codes=c?await detector.detect(c):[];
+    if(!codes.length){c=prepararCanvasV13(false);codes=c?await detector.detect(c):[]}
+    if(!codes.length){candidateHits=0;return}
+    const value=String(codes[0].rawValue||'').trim().toUpperCase();
+    if(!/^[A-Z0-9._\-]+$/.test(value)){candidateHits=0;return}
+
+    const now=Date.now();
+    if(value===candidateCode && now-candidateAt<1600) candidateHits++;
+    else {candidateCode=value;candidateHits=1}
+    candidateAt=now;
+
+    if(candidateHits>=2){
+      scannerCooldownUntil=now+2600;
+      candidateHits=0;
+      if(navigator.vibrate)navigator.vibrate([120,60,120]);
+      await registrarCodigo(value);
+    }
+  }catch(e){
+    // Mantener lectura activa; errores transitorios de enfoque no detienen el escáner.
+  }finally{cameraBusy=false}
+}
+
+async function registrarCodigo(codigo){
+  const evento=getEvento();if(!evento)return;
+  mostrar('estadoScanner','Validando código...','warn');$('codigoManual').classList.add('busy');
+  try{
+    const r=await rpc('registrarPorCodigoV7',TOKEN,evento,codigo);
+    $('codigoManual').value='';mostrarResultado(r,'estadoScanner');await actualizarResumen();
+  }catch(e){manejarErrorSesion(e,'estadoScanner')}
+  finally{$('codigoManual').classList.remove('busy')}
+}
+
+async function buscarPersonas(texto){
+  const evento=$('evento').value, cont=$('resultados');
+  if(!evento){cont.innerHTML='<div class="muted">Selecciona primero un evento.</div>';return}
+  if(texto.trim().length<2){cont.innerHTML='';return}
+  cont.innerHTML='<div class="muted">Buscando...</div>';
+  try{
+    const ps=await rpc('buscarPersonasV7',TOKEN,evento,texto);
+    cont.innerHTML='';
+    if(!ps.length){cont.innerHTML='<div class="muted">No se encontraron coincidencias entre los convocados.</div>';return}
+    ps.forEach(p=>{
+      const d=document.createElement('div');d.className='persona';
+      const i=document.createElement('div');i.innerHTML=`<strong>${esc(p.nombre)}</strong><small>${esc(p.cargo||'')}${p.municipio?' · '+esc(p.municipio):''}${p.seccion?' · Sección '+esc(p.seccion):''}${p.distritoLocal?' · DL '+esc(p.distritoLocal):''}</small>`;
+      const b=document.createElement('button');b.className='primary';b.textContent='Registrar';b.onclick=()=>registrarManual(p.id,b);
+      d.append(i,b);cont.appendChild(d);
+    });
+  }catch(e){manejarErrorSesion(e,'estadoManual')}
+}
+
+async function registrarManual(id,b){
+  const evento=getEvento();if(!evento)return;b.disabled=true;
+  try{
+    const r=await rpc('registrarManualV7',TOKEN,evento,id);mostrarResultado(r,'estadoManual');
+    if(r.ok){$('buscar').value='';$('resultados').innerHTML=''}await actualizarResumen();
+  }catch(e){manejarErrorSesion(e,'estadoManual')}
+  finally{b.disabled=false}
+}
+
+function mostrarResultado(r,dest){
+  const p=r.persona||{};
+  if(r.ok)mostrar(dest,`<strong>✓ ASISTENCIA REGISTRADA</strong><br>${esc(p.nombre||'')}<br><span style="font-size:13px">${esc(p.municipio||'')}${p.distritoLocal?' · DL '+esc(p.distritoLocal):''}${p.seccion?' · Sección '+esc(p.seccion):''}<br>${esc(r.fecha||'')} ${esc(r.hora||'')} · ${esc(r.tipo||'')}</span>`,'ok',true);
+  else if(r.duplicate)mostrar(dest,`<strong>⚠ ASISTENCIA YA REGISTRADA</strong><br>${esc(p.nombre||'')}<br><span style="font-size:13px">Registro original: ${esc(r.fecha||'')} ${esc(r.hora||'')}</span>`,'warn',true);
+  else mostrar(dest,`<strong>No se realizó el registro.</strong><br>${esc(r.message||'')}${p.nombre?'<br>'+esc(p.nombre):''}`,'error',true);
+}
+
+async function actualizarResumen(){
+  const evento=$('evento').value;
+  if(!evento){pintarResumen({convocados:0,asistencias:0,pendientes:0,porcentaje:0,ultimos:[]});return}
+  try{pintarResumen(await rpc('obtenerResumenEventoV7',TOKEN,evento))}
+  catch(e){manejarErrorSesion(e,'estadoScanner')}
+}
+
+function pintarResumen(r){
+  $('stConv').textContent=r.convocados||0;$('stAsis').textContent=r.asistencias||0;$('stPend').textContent=r.pendientes||0;
+  $('stPct').textContent=Number(r.porcentaje||0).toFixed(2)+'%';$('barra').style.width=Math.min(100,Number(r.porcentaje||0))+'%';
+  if(r.ambito)$('ambitoLabel').textContent='Ámbito de operación: '+r.ambito;
+  const u=$('ultimos');u.innerHTML='';
+  if(!r.ultimos||!r.ultimos.length){u.textContent='Aún no hay registros para este evento y ámbito.';return}
+  r.ultimos.forEach(x=>{const d=document.createElement('div');d.className='ultimo';d.innerHTML=`<span>${esc(x.hora||'')}</span><strong>${esc(x.nombre||'')}</strong><span>${esc(x.tipo||'')}</span>`;u.appendChild(d)});
+}
+
+async function cargarReporte(){
+  if(!CONTEXTO||!CONTEXTO.permisos.reportes)return;
+  const evento=$('evento').value;if(!evento){mostrar('reporteEstado','Selecciona un evento.','warn');return}
+  mostrar('reporteEstado','Generando reporte...','warn');
+  try{
+    ultimoReporte=await rpc('obtenerReporteV7',TOKEN,evento,$('tipoReporte').value);pintarReporte(ultimoReporte);
+    $('reporteEstado').className='status';
+  }catch(e){manejarErrorSesion(e,'reporteEstado')}
+}
+
+function pintarReporte(r){
+  $('reporteTitulo').textContent=r.titulo||'';$('reporteGenerado').textContent='Generado: '+(r.generado||'');
+  const t=r.totales||{};$('rpConv').textContent=t.convocados||0;$('rpAsis').textContent=t.asistencias||0;$('rpPend').textContent=t.pendientes||0;$('rpPct').textContent=Number(t.avance||0).toFixed(2)+'%';
+  const b=$('reporteBody');b.innerHTML='';
+  (r.filas||[]).forEach(x=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${esc(x.grupo||'')}</td><td>${esc(x.df||'')}</td><td>${esc(x.dl||'')}</td><td>${esc(x.municipio||'')}</td><td class="num">${x.convocados||0}</td><td class="num">${x.asistencias||0}</td><td class="num">${x.pendientes||0}</td><td class="num pct">${Number(x.avance||0).toFixed(2)}%</td>`;
+    b.appendChild(tr);
+  });
+}
+
+function exportarCSV(){
+  if(!ultimoReporte||!ultimoReporte.filas){mostrar('reporteEstado','Genera primero el reporte.','warn');return}
+  const rows=[['Grupo','DF','DL','Municipio','Convocados','Asistencias','Pendientes','Avance %']];
+  ultimoReporte.filas.forEach(x=>rows.push([x.grupo,x.df,x.dl,x.municipio,x.convocados,x.asistencias,x.pendientes,Number(x.avance||0).toFixed(2)]));
+  rows.push(['TOTAL','','','',ultimoReporte.totales.convocados,ultimoReporte.totales.asistencias,ultimoReporte.totales.pendientes,Number(ultimoReporte.totales.avance||0).toFixed(2)]);
+  const csv='\ufeff'+rows.map(r=>r.map(v=>'"'+String(v??'').replaceAll('"','""')+'"').join(',')).join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='reporte_asistencia_'+$('tipoReporte').value.toLowerCase()+'.csv';a.click();URL.revokeObjectURL(a.href);
+}
+
+function manejarErrorSesion(e,dest){
+  if(String(e.message||'').toLowerCase().includes('sesión vencida')){limpiarSesion();alert('La sesión venció. Inicia sesión nuevamente.');return}
+  mostrar(dest,e.message||String(e),'error');
+}
+function mostrar(id,msg,tipo,html=false){const el=$(id);if(!el)return;el.className='status show '+tipo;if(html)el.innerHTML=msg;else el.textContent=msg}
+function limpiarMensajes(){['estadoScanner','estadoManual','reporteEstado'].forEach(id=>{const e=$(id);if(e){e.className='status';e.textContent=''}})}
+function esc(s){return String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;')}
+</script>
+</body>
+</html>
