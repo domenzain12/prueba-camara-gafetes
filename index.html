@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Lector V14 - Asistencia</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f2f2f2;font-family:Arial,sans-serif;color:#25262a}
+.wrap{max-width:680px;margin:auto;padding:14px}
+.head{background:#6f1d46;color:#fff;border-radius:16px;padding:18px;text-align:center}
+.head h1{margin:0 0 5px;font-size:21px}.head p{margin:0;font-size:13px;opacity:.92}
+.card{background:#fff;border-radius:16px;padding:14px;margin-top:12px;box-shadow:0 4px 16px rgba(0,0,0,.08)}
+.video-wrap{position:relative;border-radius:12px;overflow:hidden;background:#111}
+video{width:100%;min-height:285px;display:block;object-fit:cover;background:#111}
+.scan-box{position:absolute;left:6%;right:6%;top:39%;height:22%;border:3px solid #fff;border-radius:10px;box-shadow:0 0 0 9999px rgba(0,0,0,.28);pointer-events:none}
+.scan-line{position:absolute;left:9%;right:9%;top:50%;height:2px;background:#fff;pointer-events:none}
+button{width:100%;padding:14px;margin-top:10px;border:0;border-radius:11px;font-size:16px;font-weight:bold}
+.primary{background:#6f1d46;color:#fff}.secondary{background:#e2e2e2;color:#333}
+.result{border:2px solid #ddd;border-radius:12px;padding:18px;text-align:center;min-height:125px}
+.result.ok{border-color:#1b7f32;background:#eef8ef}.result.warn{border-color:#b78103;background:#fff8e1}.result.err{border-color:#b3261e;background:#fff1f0}
+.label{font-size:12px;color:#666;font-weight:bold}
+#codigo{font-size:27px;font-weight:bold;color:#6f1d46;word-break:break-all;margin-top:6px}
+#mensaje{font-size:18px;font-weight:bold;margin-top:9px}
+#persona{font-size:14px;margin-top:8px}
+.small{font-size:12px;color:#666;margin-top:7px}.status{font-size:13px;line-height:1.4}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <h1>LECTOR DE ASISTENCIA V14</h1>
+    <p>CODE 39 · inversión automática · 2 lecturas de confirmación</p>
+  </div>
+
+  <div class="card">
+    <div class="video-wrap">
+      <video id="video" autoplay playsinline muted></video>
+      <div class="scan-box"></div><div class="scan-line"></div>
+    </div>
+    <button id="btnStart" class="primary">📷 Iniciar lector</button>
+    <button id="btnStop" class="secondary" disabled>Detener lector</button>
+  </div>
+
+  <div class="card">
+    <div id="resultado" class="result">
+      <div class="label">ÚLTIMA LECTURA</div>
+      <div id="codigo">—</div>
+      <div id="mensaje">Listo para escanear</div>
+      <div id="persona"></div>
+      <div id="detalle" class="small"></div>
+    </div>
+  </div>
+
+  <div class="card status" id="estado">
+    Abre esta página desde el botón “Abrir lector de cámara” del sistema de asistencia.
+  </div>
+</div>
+<canvas id="work" style="display:none"></canvas>
+<script>
+(() => {
+  const video=document.getElementById('video');
+  const btnStart=document.getElementById('btnStart');
+  const btnStop=document.getElementById('btnStop');
+  const resultado=document.getElementById('resultado');
+  const codigoEl=document.getElementById('codigo');
+  const mensajeEl=document.getElementById('mensaje');
+  const personaEl=document.getElementById('persona');
+  const detalleEl=document.getElementById('detalle');
+  const estado=document.getElementById('estado');
+  const work=document.getElementById('work');
+
+  let stream=null, detector=null, timer=null, activo=false, procesando=false, esperandoBackend=false;
+  let candidato='', hits=0, candidatoAt=0, cooldown=0;
+
+  function nombrePersona(p){
+    if(!p)return '';
+    return p.nombre || p.NOMBRE || p.coordinacion || p['COORDINACIÓN SECCIONAL'] || '';
+  }
+  function setResult(cls,code,msg,p,detail){
+    resultado.className='result '+(cls||'');
+    codigoEl.textContent=code||'—'; mensajeEl.textContent=msg||'';
+    personaEl.textContent=p||''; detalleEl.textContent=detail||'';
+  }
+
+  async function prepararDetector(){
+    if(!('BarcodeDetector' in window)) throw new Error('BarcodeDetector no disponible en este navegador.');
+    const formatos=await BarcodeDetector.getSupportedFormats();
+    if(!formatos.includes('code_39')) throw new Error('Este navegador no soporta CODE 39.');
+    detector=new BarcodeDetector({formats:['code_39']});
+  }
+
+  function roi(invertir){
+    const vw=video.videoWidth,vh=video.videoHeight;if(!vw||!vh)return null;
+    const sx=Math.floor(vw*.05),sy=Math.floor(vh*.37),sw=Math.floor(vw*.90),sh=Math.floor(vh*.26);
+    const scale=1.6;work.width=Math.max(640,Math.floor(sw*scale));work.height=Math.max(180,Math.floor(sh*scale));
+    const ctx=work.getContext('2d',{willReadFrequently:true});
+    ctx.drawImage(video,sx,sy,sw,sh,0,0,work.width,work.height);
+    const img=ctx.getImageData(0,0,work.width,work.height),d=img.data;
+    for(let i=0;i<d.length;i+=4){
+      const g=Math.round(.299*d[i]+.587*d[i+1]+.114*d[i+2]);
+      let v=g>=155?255:0;if(invertir)v=255-v;
+      d[i]=d[i+1]=d[i+2]=v;d[i+3]=255;
+    }
+    ctx.putImageData(img,0,0);return work;
+  }
+
+  async function detectar(){
+    if(!activo||!detector||procesando||esperandoBackend||Date.now()<cooldown||video.readyState<2)return;
+    procesando=true;
+    try{
+      let c=roi(true),codes=c?await detector.detect(c):[];
+      if(!codes.length){c=roi(false);codes=c?await detector.detect(c):[]}
+      if(!codes.length){hits=0;return}
+
+      const value=String(codes[0].rawValue||'').trim().toUpperCase();
+      if(!value){hits=0;return}
+      const now=Date.now();
+
+      if(value===candidato && now-candidatoAt<1500) hits++;
+      else {candidato=value;hits=1}
+      candidatoAt=now;
+
+      if(hits>=2){
+        hits=0;esperandoBackend=true;cooldown=now+2500;
+        setResult('warn',value,'Validando asistencia...','','');
+        if(navigator.vibrate)navigator.vibrate([100,50,100]);
+
+        if(!window.opener || window.opener.closed){
+          esperandoBackend=false;
+          setResult('err',value,'Sistema principal no disponible','','Vuelve al sistema y abre el lector desde el botón de cámara.');
+          return;
+        }
+        window.opener.postMessage({type:'V14_BARCODE',code:value},'*');
+      }
+    }catch(e){
+      estado.textContent='Error de lectura: '+e.message;
+    }finally{procesando=false}
+  }
+
+  window.addEventListener('message',ev=>{
+    const m=ev.data||{};
+    if(m.type!=='V14_RESULT')return;
+    esperandoBackend=false;
+    const p=nombrePersona(m.persona);
+    if(m.ok){
+      setResult('ok',codigoEl.textContent,m.message||'Asistencia registrada',p,(m.fecha||'')+' '+(m.hora||''));
+      if(navigator.vibrate)navigator.vibrate(180);
+    }else if(m.duplicate){
+      setResult('warn',codigoEl.textContent,m.message||'Asistencia ya registrada',p,(m.fecha||'')+' '+(m.hora||''));
+    }else{
+      setResult('err',codigoEl.textContent,m.message||'No fue posible registrar',p,'');
+    }
+    setTimeout(()=>{ if(activo&&!esperandoBackend) setResult('', '—','Listo para escanear','',''); },2200);
+  });
+
+  async function iniciar(){
+    try{
+      if(!window.isSecureContext)throw new Error('Se requiere HTTPS.');
+      await prepararDetector();
+      stream=await navigator.mediaDevices.getUserMedia({
+        video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080},focusMode:{ideal:'continuous'}},
+        audio:false
+      });
+      video.srcObject=stream;await video.play();
+      activo=true;btnStart.disabled=true;btnStop.disabled=false;
+      estado.textContent='Cámara activa. Centra las barras dentro del rectángulo.';
+      timer=setInterval(detectar,140);
+    }catch(e){
+      setResult('err','—','No se pudo abrir el lector','',e.message);
+      estado.textContent=e.message;
+    }
+  }
+
+  function detener(){
+    activo=false;if(timer)clearInterval(timer);timer=null;
+    if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}
+    video.srcObject=null;btnStart.disabled=false;btnStop.disabled=true;
+    estado.textContent='Lector detenido.';
+  }
+
+  btnStart.addEventListener('click',iniciar);
+  btnStop.addEventListener('click',detener);
+})();
+</script>
+</body>
+</html>
